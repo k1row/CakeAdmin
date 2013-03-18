@@ -1,0 +1,181 @@
+<?php
+
+/*
+実際にTerminalから実行する場合は、
+/usr/bin/php /CakePHPのパス/app/Console/cake.php Hoge -app /CakePHPのパス/app/
+
+1) /usr/bin/php                        ･･･ phpまでのパス
+2) /CakePHPのパス/app/Console/cake.php ･･･ cake.phpまでのパス(固定）
+3) Hoge                                ･･･ Shell.phpを除いたシェル名
+4) -app                                ･･･ appコマンド
+5) /CakePHPのパス/app/                 ･･･ appまでのパス(固定）
+
+メソッド名を指定しない場合自動出来に、main()メソッドが呼び出される
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaign /usr/local/nginx/cakeAdmin/app
+
+シェル名の後に任意のメソッドを指定できる
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaign test /usr/local/nginx/cakeAdmin/app
+
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaign main 2013-03-10 -app /usr/local/nginx/cakeAdmin/app
+パラメータを渡すことも可能
+*/
+
+
+
+/*
+
+CREATE TABLE `admin_analyze_campaigns` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `advertiser_id` int(11) NOT NULL,
+  `campaign_id` int(11) NOT NULL,
+  `target_date` date NOT NULL,
+  `click_num` smallint(6) NOT NULL,
+  `install_num` smallint(6) NOT NULL,
+  `cvr` double(4,2) NOT NULL,
+  `created` datetime NOT NULL,
+  `modified` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `u_index` (`campaign_id`,`target_date`),
+  KEY `advertiser_id` (`advertiser_id`,`campaign_id`),
+  KEY `campaign_id` (`campaign_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+*/
+
+App::uses('Shell', 'Console');
+
+class AnalyzeCampaignShell extends Shell
+{
+  var $uses = array('AdvertiserMaster', 'CampaignMaster', 'Click', 'Conversion', 'AdminAnalyzeCampaign');
+  var $target_date;
+
+  // オーバーライドして、Welcome to CakePHP･･･のメッセージを出さないようにする。
+  function startup ()
+  {
+    $this->log (Configure::version(), LOG_DEBUG);
+
+    Configure::write ('debug', 2);
+    //$debug = Configure::read ('debug'); // 設定ファイルを読むこともできる
+    $this->target_date = date ("Y-m-d", strtotime ("-1 day"));
+    $this->User = ClassRegistry::init ('User');
+  }
+
+  public function main ()
+  {
+    //$this->log ('shell main', LOG_DEBUG);
+
+    // 引数が正当な日付で合った場合集計データ日を変更
+    if (!isset ($this->args[0]))
+    {
+      if (!$this->isValidDate ($this->args[0]))
+      {
+        echo 'Invalid arg = '.$this->args[0]."\n";
+        echo 'Usage : php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaign main 2013-03-10 -app /usr/local/nginx/cakeAdmin/app'."\n";
+        exit;
+      }
+
+      $this->target_date = date ("Y-m-d", strtotime ($this->args[0]));
+    }
+
+    //$this->log ($this->target_date, LOG_DEBUG);
+
+    $campaign_result = $this->getExistCampaign ();
+    $this->insertAnalyzeData ($campaign_result);
+  }
+
+  function isValidDate ($input)
+  {
+    $date_format = 'Y-m-d';
+    $input = trim($input);
+    $time = strtotime($input);
+
+    $is_valid = date($date_format, $time) == $input;
+
+    //print "Valid [$input] ? ".($is_valid ? 'yes' : 'no')."\n";
+    return $is_valid ? true : false;
+  }
+
+  function getExistCampaign ()
+  {
+    //$this->log ('getExistCampaign', LOG_DEBUG);
+
+    $datas = $this->CampaignMaster->find ('all', array (
+      'conditions' => array (array ('CampaignMaster.begin_time <=' => "$this->target_date"),
+                             array ('CampaignMaster.end_time >=' => "$this->target_date"))));
+
+    $this->log ($datas, LOG_DEBUG);
+    //echo $this->sqlDump ();
+
+    $result = array ();
+    foreach ($datas as $data)
+    {
+      $insert_data;
+      $insert_data['target_date'] = $this->target_date;
+      $insert_data['advertiser_id'] = $data['CampaignMaster']['advertiser_id'];
+      $insert_data['campaign_id'] = $data['CampaignMaster']['id'];
+      $insert_data['click_num'] = $this->getClicks ($data['CampaignMaster']['id']);
+      $insert_data['install_num'] = $this->getConversions ($data['CampaignMaster']['id']);
+      $insert_data['cvr'] = round ($insert_data['install_num'] / $insert_data['click_num'], 2);
+
+      array_push ($result, $insert_data);
+    }
+    //$this->log ($result, LOG_DEBUG);
+    return $result;
+  }
+
+  function getClicks ($campaign_id)
+  {
+    //$this->log ('getClick campaign_id ='.$campaign_id, LOG_DEBUG);
+
+    $datas = $this->Click->find ('count', array (
+      'conditions' => array ('Click.campaign_id' => $campaign_id,
+                             array ('Click.created >=' => "$this->target_date 00:00:00"),
+                             array ('Click.created <=' => "$this->target_date 23:59:59"))));
+
+    echo $this->sqlDump ();
+    //$this->log ("clicks = $datas", LOG_DEBUG);
+    return $datas;
+  }
+
+  function getConversions ($campaign_id)
+  {
+    //$this->log ('getConversions campaign_id ='.$campaign_id, LOG_DEBUG);
+
+    $datas = $this->Conversion->find ('count', array (
+      'conditions' => array ('Conversion.campaign_id' => $campaign_id,
+                             array ('Conversion.created >=' => "$this->target_date 00:00:00"),
+                             array ('Conversion.created <=' => "$this->target_date 23:59:59"))));
+
+    //echo $this->sqlDump ();
+    //$this->log ("conversions = $datas", LOG_DEBUG);
+    return $datas;
+  }
+
+  function insertAnalyzeData ($campaign_result)
+  {
+    $this->log ('insertAnalyzeData', LOG_DEBUG);
+    $this->log ($campaign_result, LOG_DEBUG);
+    return;
+    foreach ($campaign_result as $result)
+    {
+      //$this->log ($result, LOG_DEBUG);
+
+      $this->AdminAnalyzeCampaign->create ();
+      $this->AdminAnalyzeCampaign->set (array (
+        'target_date' => $result['target_date'],
+        'advertiser_id' => $result['advertiser_id'],
+        'campaign_id' => $result['campaign_id'],
+        'click_num' => $result['click_num'],
+        'install_num' => $result['install_num'],
+        'cvr' => $result['cvr'],
+        ));
+      $this->AdminAnalyzeCampaign->save ();
+      //echo $this->sqlDump ();
+    }
+  }
+
+  function sqlDump ($dbConfig = 'default')
+  {
+    ConnectionManager::getDataSource ($dbConfig)->showLog ();
+  }
+}

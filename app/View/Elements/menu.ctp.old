@@ -1,0 +1,33 @@
+<div id="body-wrapper">
+<div id="sidebar">
+    <div id="sidebar-wrapper"> <!-- Sidebar with logo and menu -->
+        <div id="snLogo">
+            <span>Phoenix</span><br/>
+            Administration Page
+        </div>
+        <div id="profile-links">
+          <ul id="main-nav">
+              <li><a href="individualpublisher" class="nav-top-item">Publishers</a>
+                  <ul>
+                      <li><a href=""></a>
+                  </ul>
+              </li>
+          </ul>
+          <ul id="main-nav">
+              <li><a href="/mainadvertiser" class="nav-top-item">Advertisers</a>
+                  <ul>
+                      <li><a href=""></a>
+                  </ul>
+              </li>
+          </ul>
+          <ul id="main-nav">
+              <li><a href="#" class="nav-top-item">Admin</a>
+                  <ul>
+                      <li><a href=""></a>
+                  </ul>
+              </li>
+          </ul>
+		</div>
+    </div>
+</div>
+
