@@ -130,3 +130,14 @@ ul  {margin:0px;}
         border-left:solid 1px #ff6600;
         border-right:solid 1px #ff6600;
         }
+
+.menu
+        {
+        float: left;
+        width: 250px;
+        margin-right: -250px;
+        background: #CC0;   
+        position: relative;
+        z-index: 2;
+        min-height: 300px;
+        }

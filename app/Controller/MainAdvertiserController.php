@@ -2,9 +2,9 @@
 
 App::uses('Controller', 'Controller');
 
-class MainAdvertiserController extends Controller
+class MainadvertiserController extends Controller
 {
-  public $name = 'MainAdvertiser';
+  public $name = 'Mainadvertiser';
 
   public function index ()
   {
@@ -37,7 +37,7 @@ class MainAdvertiserController extends Controller
   {
     $datas = $this->CampaignMaster->find ('count', array (
       'conditions' => array ('CampaignMaster.advertiser_id' => $advertiser_id,
-                             array ('CampaignMaster.end_time <=' => "$today 23:59:59"))));
+                             array ('CampaignMaster.end_time >' => "$today 23:59:59"))));
 
     return $datas;
   }

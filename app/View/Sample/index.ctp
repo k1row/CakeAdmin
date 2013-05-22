@@ -1,6 +1,6 @@
 <html>
   <head>
-    <titile>Index Page</titile>
+    <title>Index Page</title>
   </head>
   <body>
     <h1>Index Page</h1>

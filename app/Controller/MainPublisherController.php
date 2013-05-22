@@ -2,9 +2,9 @@
 
 App::uses('Controller', 'Controller');
 
-class MainPublisherController extends Controller
+class MainpublisherController extends Controller
 {
-  public $name = 'MainPublisher';
+  public $name = 'Mainpublisher';
 
   public function index()
   {

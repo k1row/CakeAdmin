@@ -2,42 +2,35 @@
 
 App::uses('Controller', 'Controller');
 
-class IndividualAppController extends Controller
+class IndividualappController extends Controller
 {
-  public $name = 'IndividualApp';
-
-  /*
-  // Reference
-  // http://shie-plusplus.seesaa.net/article/322310531.html
-
-  var $paginate = array(
-    'page' => 1,
-    'limit' => 25,
-    'recursive' => 0,
-    'conditions' => null,
-    'fields' => null,
-    'order' => null,
-    );
-
-  public function index()
-  {
-    $this->loadModel('Conversion');
-    $this->paginate['conditions'] = array('conversions.campaign_id' => $this->params['url']['cid']);
-    $this->set('datas', $this->paginate('Conversion'));
-  }
-    */
+  public $name = 'Individualapp';
 
   public function index()
   {
     $this->loadModel ('AdminAnalyzeCampaign');
+    $this->loadModel ('AdminAnalyzeCampaignPerDay');
+    $this->loadModel('CampaignMaster');
+
+    $appsigid = $this->params['url']['cid'];
+    $this->set ('appsigid', $appsigid);
+
+    $datas = $this->AdminAnalyzeCampaign->find ('all', array (
+      'conditions' => array ('AdminAnalyzeCampaign.appsigid' => $appsigid)));
+
+    $this->set ('datas', $datas);
 
     $this->paginate = array (
-      'conditions' => array ('AdminAnalyzeCampaign.campaign_id' => $this->params['url']['cid']),
+      'conditions' => array ('AdminAnalyzeCampaignPerDay.appsigid' => $appsigid),
       'limit' => 50,
-      'order' => array('AdminAnalyzeCampaign.target_date' => 'DESC'),
+      'order' => array('AdminAnalyzeCampaignPerDay.target_date' => 'DESC'),
       );
 
-    $this->set ('campaign_id', $this->params['url']['cid']);
-    $this->set ('datas', $this->paginate ('AdminAnalyzeCampaign'));
+    $this->set ('dailydatas', $this->paginate ('AdminAnalyzeCampaignPerDay'));
+
+    $campaignmaster = $this->CampaignMaster->find ('all', array (
+      'conditions' => array ('CampaignMaster.id' => $appsigid)));
+
+    $this->set ('campaignmaster', $campaignmaster);
   }
 }

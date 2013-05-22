@@ -11,12 +11,12 @@
 5) /CakePHPのパス/app/                 ･･･ appまでのパス(固定）
 
 メソッド名を指定しない場合自動出来に、main()メソッドが呼び出される
-php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisher /usr/local/nginx/cakeAdmin/app
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisherForDaily /usr/local/nginx/cakeAdmin/app
 
 シェル名の後に任意のメソッドを指定できる
-php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisher test /usr/local/nginx/cakeAdmin/app
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisherForDaily test /usr/local/nginx/cakeAdmin/app
 
-php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisher main 2013-03-10 -app /usr/local/nginx/cakeAdmin/app
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisherForDaily main 2013-03-10 -app /usr/local/nginx/cakeAdmin/app
 パラメータを渡すことも可能
 */
 
@@ -24,11 +24,12 @@ php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisher m
 
 /*
 
-  CREATE TABLE `admin_analyze_publishers` (
+  CREATE TABLE `admin_analyze_publisher_per_days` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `publisher_id` int(11) NOT NULL,
   `advertiser_id` int(11) NOT NULL,
-  `appsigid` varchcar(255) NOT NULL,
+  `appsigid` int(11) NOT NULL,
+  `target_date` DATE NOT NULL,
   `campaign_name` varchar(255) NOT NULL,
   `expense` smallint(6) NOT NULL,
   `cpi` double(4,2) NOT NULL,
@@ -40,17 +41,16 @@ php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeIndividualPublisher m
   `created` datetime NOT NULL,
   `modified` datetime NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `u_index` (`publisher_id`, `advertiser_id`, `appsigid`)
+  UNIQUE KEY `u_index` (`publisher_id`, `advertiser_id`, `appsigid`, `target_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
 
 */
 
 App::uses('Shell', 'Console');
 
-class AnalyzeIndividualPublisherShell extends Shell
+class AnalyzeIndividualPublisherForDailyShell extends Shell
 {
-  var $uses = array('PublisherMaster', 'CampaignMaster', 'Click', 'Conversion', 'AdminAnalyzePublisher');
+  var $uses = array('PublisherMaster', 'CampaignMaster', 'Click', 'Conversion', 'AdminAnalyzePublisherPerDay');
   var $target_date;
 
   function startup ()
@@ -78,9 +78,14 @@ class AnalyzeIndividualPublisherShell extends Shell
     $result = array ();
     foreach ($datas as $data)
     {
+      if ($data['CampaignMaster']['advertiser_id'] == 100000000) { next; }
+      if ($data['CampaignMaster']['appsigid'] === '2045444883139e79c4246183595c2df2613d6192') { next; }
+      if ($data['CampaignMaster']['appsigid'] === '40b247a5c58ea510c773942a6ba0aa3a7467cc35') { next; }
+
       //$this->log ($data, LOG_DEBUG);
       $insert_data;
       $insert_data['appsigid'] = $data['CampaignMaster']['id'];
+      $insert_data['target_date'] = $this->target_date;
       $insert_data['advertiser_id'] = $data['CampaignMaster']['advertiser_id'];
       $insert_data['campaign_name'] = $data['CampaignMaster']['name'];
       $insert_data['expense'] = $data['CampaignMaster']['expense'];
@@ -99,10 +104,6 @@ class AnalyzeIndividualPublisherShell extends Shell
 
     foreach ($datas as $data)
     {
-      if ($data['Click']['publisher_id'] == 200000000) { next; }
-      if ($data['Click']['appsigid'] === '2045444883139e79c4246183595c2df2613d6192') { next; }
-      if ($data['Click']['appsigid'] === '40b247a5c58ea510c773942a6ba0aa3a7467cc35') { next; }
-
       $insert_data['publisher_id'] = $data['Click']['publisher_id'];
 
       $this->getPublisherInfo ($data['Click']['publisher_id'], $insert_data);
@@ -119,7 +120,8 @@ class AnalyzeIndividualPublisherShell extends Shell
     //$this->log ('getConversions appsigid ='.$appsigid, LOG_DEBUG);
 
     $datas = $this->Conversion->find ('all', array (
-      'conditions' => array ('Conversion.appsigid' => $appsigid)));
+      'conditions' => array ('Conversion.appsigid' => $appsigid,
+                             'Conversion.created LIKE' => "$this->target_date%")));
 
     $processed_record = array ();
     $install_num = 0;
@@ -281,7 +283,6 @@ class AnalyzeIndividualPublisherShell extends Shell
   {
     if ($this->isExistsField ($data['Conversion']['idfa']))
     {
-      //$this->log ('found idfa = '.$data['Conversion']['idfa'], LOG_DEBUG);
       return $this->isInstalledTargetPublisher (array ('Click.appsigid' => $appsigid,
                                                        'Click.publisher_id' => $publisher_id,
                                                        'Click.idfa' => $data['Conversion']['idfa']));
@@ -358,12 +359,13 @@ class AnalyzeIndividualPublisherShell extends Shell
   {
     foreach ($result as $ret)
     {
-      $this->AdminAnalyzePublisher->create ();
+      $this->AdminAnalyzePublisherPerDay->create ();
 
       $field = array (
         'publisher_id' => $ret['publisher_id'],
         'advertiser_id' => $ret['advertiser_id'],
         'appsigid' => $ret['appsigid'],
+        'target_date' => $ret['target_date'],
         'campaign_name' => $ret['campaign_name'],
         'expense' => $ret['expense'],
         'cpi' => $ret['cpi'],
@@ -377,24 +379,25 @@ class AnalyzeIndividualPublisherShell extends Shell
       $already_data = $this->isExistsAnalyzeData ($ret);
       if ($already_data)
       {
-        $field['id'] =$already_data['AdminAnalyzePublisher']['id'];
+        $field['id'] =$already_data['AdminAnalyzePublisherPerDay']['id'];
       }
 
       //$this->log ("field", LOG_DEBUG);
       $this->log ($field, LOG_DEBUG);
 
-      $this->AdminAnalyzePublisher->set ($field);
-      $this->AdminAnalyzePublisher->save ();
+      $this->AdminAnalyzePublisherPerDay->set ($field);
+      $this->AdminAnalyzePublisherPerDay->save ();
       //echo $this->sqlDump ();
     }
   }
 
   function isExistsAnalyzeData ($ret)
   {
-    $datas = $this->AdminAnalyzePublisher->find ('all', array (
-      'conditions' => array ('AdminAnalyzePublisher.publisher_id' => $ret['publisher_id'],
-                             'AdminAnalyzePublisher.advertiser_id' => $ret['advertiser_id'],
-                             'AdminAnalyzePublisher.appsigid' => $ret['appsigid'])));
+    $datas = $this->AdminAnalyzePublisherPerDay->find ('all', array (
+      'conditions' => array ('AdminAnalyzePublisherPerDay.publisher_id' => $ret['publisher_id'],
+                             'AdminAnalyzePublisherPerDay.advertiser_id' => $ret['advertiser_id'],
+                             'AdminAnalyzePublisherPerDay.appsigid' => $ret['appsigid'],
+                             'AdminAnalyzePublisherPerDay.target_date' => $ret['target_date'])));
     return count ($datas) >= 1 ? $datas[0] : 0;
   }
 

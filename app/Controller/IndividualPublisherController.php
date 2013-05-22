@@ -2,9 +2,9 @@
 
 App::uses('Controller', 'Controller');
 
-class IndividualPublisherController extends Controller
+class IndividualpublisherController extends Controller
 {
-  public $name = 'IndividualPublisher';
+  public $name = 'Individualpublisher';
   public function index()
   {
     $this->loadModel ('AdminAnalyzePublisher');

@@ -2,12 +2,16 @@
 
 App::uses('Controller', 'Controller');
 
-class IndividualAdvertiserController extends Controller
+class IndividualadvertiserController extends Controller
 {
-  public $name = 'IndividualAdvertiser';
+  public $name = 'Individualadvertiser';
   public function index() {
 
+    $this->loadModel('AdvertiserMaster');
     $this->loadModel('CampaignMaster');
+
+    $advertiser = $this->AdvertiserMaster->find ('all', array (
+      'conditions' => array ('AdvertiserMaster.id' => $this->params['url']['aid'])));
 
     $this->paginate = array(
       'conditions' => array('CampaignMaster.advertiser_id' => $this->params['url']['aid']),
@@ -15,6 +19,6 @@ class IndividualAdvertiserController extends Controller
       );
 
     $this->set('datas', $this->paginate('CampaignMaster'));
-    $this->set('advertiser_name', $this->params['url']['name']);
+    $this->set('advertiser', $advertiser);
   }
 }

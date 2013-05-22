@@ -737,3 +737,25 @@ pre {
 #url-rewriting-warning {
 	display:none;
 }
+
+#sub {
+    float: left;
+    width: 200px;
+    margin-right: -200px;
+    /*background: #e0ffff;*/
+    background: #FFF68F;
+    position: relative;
+    z-index: 2;
+    min-height: 300px;
+}
+#main {
+    float: left;
+    width: 100%;
+    /*background: #EEE;*/
+    min-height: 300px;
+}
+#main .inner {
+    margin-left: 250px;
+    position: relative;
+    z-index: 1;
+}

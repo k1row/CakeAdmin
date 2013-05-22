@@ -37,8 +37,9 @@ class CsvHelper extends AppHelper
 
   function renderHeaders ()
   {
-    header ("Content-type:application/vnd.ms-excel");
-    header ("Content-disposition:attachment;filename=".$this->filename);
+    header ("Content-disposition:attachment;filename=" . $this->filename);
+    //header ("Content-type:application/vnd.ms-excel");
+    header ("Content-type: application/octet-stream");
   }
 
   function setFilename ($filename)
@@ -54,7 +55,7 @@ class CsvHelper extends AppHelper
   {
     if ($outputHeaders)
     {
-      if (is_string($outputHeaders))
+      if (is_string ($outputHeaders))
       {
         $this->setFilename ($outputHeaders);
       }

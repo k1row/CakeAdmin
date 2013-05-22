@@ -33,7 +33,7 @@ class Conversion extends AppModel
 
   function make_sql ($conditions = null)
   {
-    $query = "SELECT COUNT(*) AS count, campaign_id, LEFT(created, 10) AS created FROM conversions ";
+    $query = "SELECT COUNT(*) AS count, appsigid, LEFT(created, 10) AS created FROM conversions ";
     $count = 0;
     foreach ($conditions as $c => $rec)
     {

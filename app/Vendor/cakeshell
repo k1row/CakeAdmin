@@ -1,0 +1,12 @@
+#!/bin/bash
+TERM=dumb
+export TERM
+APP_PATH=$(cd $(dirname $(dirname $0));pwd)
+CAKE_CONSOLE_PATH=$(dirname $APP_PATH)/cake/console
+PATH=$PATH:$CAKE_CONSOLE_PATH
+cmd="cake"
+while [ $# -ne 0 ]; do
+        cmd="${cmd} $1"
+        shift
+done
+$cmd -app $APP_PATH
