@@ -11,12 +11,12 @@
 5) /CakePHPのパス/app/                 ･･･ appまでのパス(固定）
 
 メソッド名を指定しない場合自動出来に、main()メソッドが呼び出される
-php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaignForDaily /usr/local/nginx/cakeAdmin/app
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php ExportAnalyzeData /usr/local/nginx/cakeAdmin/app
 
 シェル名の後に任意のメソッドを指定できる
-php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaign test /usr/local/nginx/cakeAdmin/app
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php ExportAnalyzeData test /usr/local/nginx/cakeAdmin/app
 
-php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaign specifiedDate 2013-03-10 -app /usr/local/nginx/cakeAdmin/app
+php /usr/local/nginx/cakeAdmin/app/Console/cake.php ExportAnalyzeData specifiedDate 2013-03-10 -app /usr/local/nginx/cakeAdmin/app
 パラメータを渡すことも可能
 */
 
@@ -43,10 +43,14 @@ CREATE TABLE `admin_analyze_campaign_per_days` (
 
 App::uses('Shell', 'Console');
 
-class AnalyzeCampaignForDailyShell extends Shell
+class ExportAnalyzeDataShell extends Shell
 {
-  var $uses = array('AdvertiserMaster', 'CampaignMaster', 'Click', 'Conversion', 'AdminAnalyzeCampaignPerDay');
+  var $uses = array('CampaignMaster', 'Click', 'Conversion');
+
   var $target_date;
+  var $file_name;
+  var $begin_time;
+  var $end_time;
 
   // オーバーライドして、Welcome to CakePHP･･･のメッセージを出さないようにする。
   function startup ()
@@ -55,99 +59,70 @@ class AnalyzeCampaignForDailyShell extends Shell
 
     Configure::write ('debug', 2);
     //$debug = Configure::read ('debug'); // 設定ファイルを読むこともできる
-    $this->target_date = date ("Y-m-d", strtotime ("-1 day"));
-    //$this->target_date = date ("Y-m-d");
+
+    $this->target_date = date ("Y-m-d");
+    $this->file_name = sprintf ("%s.tsv", date ("Y-m-d-H", strtotime ("-1 hour")));
+
+    $this->begin_time = date ("Y-m-d H:00:00", strtotime ("-1 hour"));
+    $this->end_time = date ("Y-m-d H:59:59", strtotime ("-1 hour"));
     $this->User = ClassRegistry::init ('User');
   }
 
   public function main ()
   {
-    $campaign_result = $this->getExistCampaign ();
-    $this->insertAnalyzeData ($campaign_result);
-  }
-  public function specifiedDate ()
-  {
-    $this->log ($this->args[0], LOG_DEBUG);
+    $datas = $this->getExistCampaign ();
+    //$this->log ($datas, LOG_DEBUG);
 
-    // 引数が正当な日付で合った場合集計データ日を変更
-    if (!empty ($this->args[0]))
+    $this->writeFile ($datas);
+  }
+
+  function writeFile ($datas)
+  {
+    $fp = fopen ($this->file_name, "w");
+    $title = "target_date_hour\tadvertiser_id\tappsigid\tclick_num\tinstall_num\n";
+    fwrite ($fp, $title);
+    foreach ($datas as $data)
     {
-      if (!$this->isValidDate ($this->args[0]))
-      {
-        echo 'Invalid arg = '.$this->args[0]."\n";
-        echo 'Usage : php /usr/local/nginx/cakeAdmin/app/Console/cake.php AnalyzeCampaign specifiedDate 2013-03-10 -app /usr/local/nginx/cakeAdmin/app'."\n";
-        exit;
-      }
-
-      $this->target_date = date ("Y-m-d", strtotime ($this->args[0]));
-      $this->log ("target_date has changed = $this->target_date", LOG_DEBUG);
+      $l = $this->begin_time."\t".$data['advertiser_id']."\t".$data['appsigid']."\t".$data['click_num']."\t".$data['install_num']."\n";
+      fwrite ($fp, $l);
     }
-
-    //$this->log ($this->target_date, LOG_DEBUG);
-
-    $campaign_result = $this->getExistCampaign ();
-    $this->insertAnalyzeData ($campaign_result);
-  }
-
-  function isValidDate ($input)
-  {
-    $date_format = 'Y-m-d';
-    $input = trim ($input);
-    $time = strtotime ($input);
-
-    $is_valid = date ($date_format, $time) == $input;
-
-    //print "Valid [$input] ? ".($is_valid ? 'yes' : 'no')."\n";
-    return $is_valid ? true : false;
+    fclose ($fp);
   }
 
   function getExistCampaign ()
   {
-    $one_day_before = date ("Y-m-d", strtotime ("$this->target_date -1 day"));
+    //$one_day_before = date ("Y-m-d", strtotime ("$this->target_date -1 day"));
     $datas = $this->CampaignMaster->find ('all', array (
-      'conditions' => array (array ('LEFT (CampaignMaster.end_time, 10) >=' => $one_day_before))));
+      //'conditions' => array (array ('LEFT (CampaignMaster.end_time, 10) >=' => $one_day_before))));
+      'conditions' => array (array ('LEFT (CampaignMaster.end_time, 10) >=' => $this->target_date))));
 
     //echo $this->sqlDump ();
-    $this->log ($datas, LOG_DEBUG);
+    //$this->log ($datas, LOG_DEBUG);
     $result = array ();
     foreach ($datas as $data)
     {
-      if ($data['CampaignMaster']['advertiser_id'] == 100000000) { next; }
-      if ($data['CampaignMaster']['appsigid'] === '2045444883139e79c4246183595c2df2613d6192') { next; }
-      if ($data['CampaignMaster']['appsigid'] === '40b247a5c58ea510c773942a6ba0aa3a7467cc35') { next; }
-
-      //$this->log (strtotime (substr ($data['CampaignMaster']['begin_time'], 0, 10)), LOG_DEBUG);
-      //$this->log (strtotime ("$this->target_date"), LOG_DEBUG);
-
-      if (strtotime (substr ($data['CampaignMaster']['begin_time'], 0, 10)) > strtotime ("$this->target_date"))
-        continue;
+      if ($data['CampaignMaster']['advertiser_id'] === '100000000') { continue; }
+      if ($data['CampaignMaster']['id'] === '2045444883139e79c4246183595c2df2613d6192') { continue; }
+      if ($data['CampaignMaster']['id'] === '40b247a5c58ea510c773942a6ba0aa3a7467cc35') { continue; }
 
       $insert_data;
       $insert_data['advertiser_id'] = $data['CampaignMaster']['advertiser_id'];
-      $insert_data['target_date'] = $this->target_date;
       $insert_data['appsigid'] = $data['CampaignMaster']['id'];
+      $insert_data['begin_time'] = $data['CampaignMaster']['begin_time'];
+      $insert_data['end_time'] = $data['CampaignMaster']['end_time'];
       $insert_data['click_num'] = $this->getClicks ($data);
       $insert_data['install_num'] = $this->getConversions ($data);
-      $insert_data['cvr'] = round ($insert_data['install_num'] / $insert_data['click_num'], 2);
 
       array_push ($result, $insert_data);
     }
     return $result;
   }
-
   function getClicks ($data)
   {
-    /*
-    $sql = "SEELCT LEFT(created, 10), COUNT(*) as c FROM clicks
-    WHERE appsigid = '".$data['CampaignMaster']['id']."'
-      AND created LIKE '".$this->target_date."%'
-    GROUP BY LEFT(created, 10);";
-    $datas = $this->Click->query ($sql);
-     */
-
     $datas = $this->Click->find ('all', array (
       'conditions' => array ('Click.appsigid' => $data['CampaignMaster']['id'],
-                             'Click.created LIKE' => "$this->target_date%")));
+                             array ('Click.created >=' => $this->begin_time),
+                             array ('Click.created <=' => $this->end_time))));
 
     //echo $this->sqlDump ();
     return $this->getActualRecordNum ('Click', $datas);
@@ -157,7 +132,8 @@ class AnalyzeCampaignForDailyShell extends Shell
   {
     $datas = $this->Conversion->find ('all', array (
       'conditions' => array ('Conversion.appsigid' => $data['CampaignMaster']['id'],
-                             'Conversion.created LIKE' => "$this->target_date%")));
+                             array ('Conversion.created >=' => $this->begin_time),
+                             array ('Conversion.created <=' => $this->end_time))));
 
     //echo $this->sqlDump ();
     return $this->getActualRecordNum ('Conversion', $datas);
@@ -194,6 +170,7 @@ class AnalyzeCampaignForDailyShell extends Shell
       }
       if ($data["$table_name"]['openudid'])
       {
+        //$this->log ('openudid ='.$data["$table_name"]['openudid'], LOG_DEBUG);
         if (array_key_exists ($data["$table_name"]['openudid'], $result))
           continue;
 
@@ -222,7 +199,6 @@ class AnalyzeCampaignForDailyShell extends Shell
       }
       if ($data["$table_name"]['macaddr'])
       {
-        //$this->log ('macaddr ='.$data["$table_name"]['macaddr'], LOG_DEBUG);
         if (array_key_exists ($data["$table_name"]['macaddr'], $result))
           continue;
 
@@ -236,47 +212,6 @@ class AnalyzeCampaignForDailyShell extends Shell
     //$this->log (count ($result), LOG_DEBUG);
     return count ($result);
   }
-
-  function insertAnalyzeData ($campaign_result)
-  {
-    $this->log ('insertAnalyzeData', LOG_DEBUG);
-    foreach ($campaign_result as $result)
-    {
-      $this->log ($result, LOG_DEBUG);
-
-      $this->AdminAnalyzeCampaignPerDay->create ();
-      $field = array (
-        'advertiser_id' => $result['advertiser_id'],
-        'appsigid' => $result['appsigid'],
-        'target_date' => $result['target_date'],
-        'click_num' => $result['click_num'],
-        'install_num' => $result['install_num'],
-        'cvr' => $result['cvr'],
-        );
-
-      $already_data = $this->isExistsAnalyzeData ($result);
-      if ($already_data)
-      {
-        $this->log ("already exist data!!!", LOG_DEBUG);
-        $field['id'] = $already_data['AdminAnalyzeCampaignPerDay']['id'];
-      }
-
-      $this->AdminAnalyzeCampaignPerDay->set ($field);
-      $this->AdminAnalyzeCampaignPerDay->save ();
-    }
-  }
-
-  function isExistsAnalyzeData ($ret)
-  {
-    $datas = $this->AdminAnalyzeCampaignPerDay->find ('all', array (
-      'conditions' => array ('AdminAnalyzeCampaignPerDay.advertiser_id' => $ret['advertiser_id'],
-                             'AdminAnalyzeCampaignPerDay.appsigid' => $ret['appsigid'],
-                             'AdminAnalyzeCampaignPerDay.target_date' => $ret['target_date'],
-                             )));
-    //echo $this->sqlDump ();
-    return count ($datas) >= 1 ? $datas[0] : 0;
-  }
-
   function sqlDump ($dbConfig = 'default')
   {
     ConnectionManager::getDataSource ($dbConfig)->showLog ()."\n";
